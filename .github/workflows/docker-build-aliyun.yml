@@ -1,0 +1,114 @@
+name: Build and Push Docker Image to Alibaba Cloud
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - v*
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller
+          tags: |
+            type=ref,event=branch,enable=${{ github.ref_name != 'main' }},suffix=-{{sha}},format=lowercase
+            type=ref,event=pr,prefix=pr-,suffix=-{{sha}},format=lowercase
+            type=semver,pattern={{version}},format=lowercase
+            type=semver,pattern={{major}}.{{minor}},format=lowercase
+            type=semver,pattern={{major}},format=lowercase
+            type=sha
+
+  build-amd64:
+    needs: metadata
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Alibaba Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+      - name: Build and push AMD64
+        uses: docker/build-push-action@v5
+        with:
+          file: image/cloudflare-tunnel-ingress-controller/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64
+          labels: ${{ needs.metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-arm64:
+    needs: metadata
+    permissions:
+      contents: read
+    runs-on: [
+      "self-hosted",
+      "linux",
+      "arm64",
+    ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Alibaba Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+      - name: Build and push ARM64
+        uses: docker/build-push-action@v5
+        with:
+          file: image/cloudflare-tunnel-ingress-controller/Dockerfile
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+          labels: ${{ needs.metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  create-manifest:
+    needs: [metadata, build-amd64, build-arm64]
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Alibaba Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create -t registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }} \
+            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
+            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+
+          # Create additional tags from metadata
+          for tag in $(echo "${{ needs.metadata.outputs.tags }}" | tr '\n' ' '); do
+            if [[ $tag != *":${{ needs.metadata.outputs.version }}" ]]; then
+              docker buildx imagetools create -t $tag \
+                registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
+                registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+            fi
+          done
