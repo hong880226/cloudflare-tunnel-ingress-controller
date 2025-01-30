@@ -21,7 +21,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller
+            registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller
           tags: |
             type=ref,event=branch,enable=${{ github.ref_name != 'main' }},suffix=-{{sha}},format=lowercase
             type=ref,event=pr,prefix=pr-,suffix=-{{sha}},format=lowercase
@@ -51,7 +51,7 @@ jobs:
           file: image/cloudflare-tunnel-ingress-controller/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64
+          tags: registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -81,7 +81,7 @@ jobs:
           file: image/cloudflare-tunnel-ingress-controller/Dockerfile
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+          tags: registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -100,15 +100,15 @@ jobs:
           password: ${{ secrets.ALIYUN_PASSWORD }}
       - name: Create and push manifest
         run: |
-          docker buildx imagetools create -t registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }} \
-            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
-            registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+          docker buildx imagetools create -t registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }} \
+            registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
+            registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
 
           # Create additional tags from metadata
           for tag in $(echo "${{ needs.metadata.outputs.tags }}" | tr '\n' ' '); do
             if [[ $tag != *":${{ needs.metadata.outputs.version }}" ]]; then
               docker buildx imagetools create -t $tag \
-                registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
-                registry.cn-hangzhou.aliyuncs.com/my-namespace/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
+                registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-amd64 \
+                registry.cn-hangzhou.aliyuncs.com/hong-images/cloudflare-tunnel-ingress-controller:${{ needs.metadata.outputs.version }}-arm64
             fi
           done
